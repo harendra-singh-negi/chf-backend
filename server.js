@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require('axios');
+require('dotenv').config();
 const app = express();
 const PORT = 4242;
 
@@ -7,9 +8,9 @@ const PORT = 4242;
 app.use(express.json());
 
 // Salesforce base configuration
-const BASE_URL = 'https://chfusa--dec2024.sandbox.my.salesforce.com';
-const API_VERSION = 'v57.0';
-let accessToken = 'YOUR_ACCESS_TOKEN'; // Replace with a valid access token
+const BASE_URL = process.env.BASE_URL || 'https://chfusa--dec2024.sandbox.my.salesforce.com';
+const API_VERSION = process.env.API_VERSION || 'v57.0';
+let accessToken;
 
 // Middleware to set Authorization header
 app.use((req, res, next) => {
@@ -25,6 +26,27 @@ const salesforceRequest = async (method, endpoint, data = {}) => {
     return response.data;
   } catch (error) {
     throw error.response ? error.response.data : error;
+  }
+};
+
+// Refresh Access Token
+const refreshAccessToken = async () => {
+  try {
+    const response = await axios.post(`${BASE_URL}/services/oauth2/token`, null, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      params: {
+        grant_type: 'password',
+        client_id: process.env.CLIENT_ID,
+        client_secret: process.env.CLIENT_SECRET,
+        username: process.env.USERNAME,
+        password: process.env.PASSWORD,
+      },
+    });
+    accessToken = response.data.access_token;
+    console.log('Access token refreshed successfully');
+  } catch (error) {
+    console.error('Error refreshing access token:', error);
+    throw error;
   }
 };
 
@@ -91,6 +113,16 @@ app.post('/api/donationsummary', async (req, res) => {
     res.status(201).json(data);
   } catch (error) {
     res.status(500).json(error);
+  }
+});
+
+// Internal API for refreshing access token
+app.post('/internal/refresh-token', async (req, res) => {
+  try {
+    await refreshAccessToken();
+    res.status(200).json({ message: 'Access token refreshed successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to refresh access token', error });
   }
 });
 
