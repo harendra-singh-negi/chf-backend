@@ -7,16 +7,12 @@ const PORT = 4242;
 // Middleware to parse JSON
 app.use(express.json());
 
-// This is a public sample test API key.
-// Don’t submit any personally identifiable information in requests made with this key.
-// Sign in to see your own test API key embedded in code samples.
+// ========== STRIPE CODE (UNCHANGED) ==========
 const stripe = require('stripe')(`${process.env.VITE_STRIPE_CLIENT_SECRET}`);
 
-// const stripe = require("stripe")('sk_test_51QX2EjD1HGHWO4740PkSZeF6kW0QpepPxc8BNFLpEDEZXuIXdABA9sTEs0zAWKFJyLmNSnEPatPGqx9TlzW49gKU00UmX8e3aw');
 console.log('VITE_STRIPE_CLIENT_SECRET', process.env.VITE_STRIPE_CLIENT_SECRET);
+
 const calculateOrderAmount = items => {
-  // Calculate the order total on the server to prevent
-  // people from directly manipulating the amount on the client
   let total = 0;
   items.forEach(item => {
     total += item.amount;
@@ -28,52 +24,28 @@ app.post('/create-payment-intent', async (req, res) => {
   const { items } = req.body;
   console.log('🚀 ~ app.post ~ items:', items);
 
-  // Create a PaymentIntent with the order amount and currency
   try {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: calculateOrderAmount(items),
       currency: 'usd',
-      // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
-      automatic_payment_methods: {
-        enabled: true,
-      },
+      automatic_payment_methods: { enabled: true },
     });
 
-    res.statusCode(200).send({ clientSecret: paymentIntent.client_secret });
+    // Return client secret only
+    res.status(200).send({ clientSecret: paymentIntent.client_secret });
   } catch (error) {
-    res.statusCode(500).send(error);
+    res.status(500).send(error);
   }
 });
+// ========== END STRIPE CODE ==========
 
-// Salesforce base configuration
+// ========== SALESFORCE BASE CONFIG ==========
 const BASE_URL =
   process.env.BASE_URL || 'https://chfusa--dec2024.sandbox.my.salesforce.com';
 const API_VERSION = process.env.API_VERSION || 'v57.0';
-let accessToken;
+let accessToken = null;
 
-// Middleware to set Authorization header
-app.use((req, res, next) => {
-  req.headers['Authorization'] = `Bearer ${accessToken}`;
-  next();
-});
-
-// Helper function to make Salesforce API requests
-const salesforceRequest = async (method, endpoint, data = {}) => {
-  try {
-    const url = `${BASE_URL}/services/data/${API_VERSION}/${endpoint}`;
-    const response = await axios({
-      method,
-      url,
-      headers: { Authorization: `Bearer ${accessToken}` },
-      data,
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response ? error.response.data : error;
-  }
-};
-
-// Refresh Access Token
+// ========== REFRESH ACCESS TOKEN HELPER ==========
 const refreshAccessToken = async () => {
   try {
     const response = await axios.post(
@@ -98,10 +70,42 @@ const refreshAccessToken = async () => {
   }
 };
 
-// Wrapper APIs
+// ========== MIDDLEWARE TO ENSURE TOKEN BEFORE SALESFORCE CALLS ==========
+const ensureSalesforceAccessToken = async (req, res, next) => {
+  try {
+    // Always refresh the token before each Salesforce request
+    await refreshAccessToken();
+    // Bind the freshly acquired access token to the request headers
+    req.headers['Authorization'] = `Bearer ${accessToken}`;
+    next();
+  } catch (error) {
+    console.error('Error ensuring Salesforce access token:', error);
+    return res
+      .status(500)
+      .json({ message: 'Error ensuring Salesforce access token', error });
+  }
+};
+
+// ========== HELPER FOR SALESFORCE REQUESTS ==========
+const salesforceRequest = async (method, endpoint, data = {}) => {
+  try {
+    const url = `${BASE_URL}/services/data/${API_VERSION}/${endpoint}`;
+    const response = await axios({
+      method,
+      url,
+      headers: { Authorization: `Bearer ${accessToken}` },
+      data,
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response ? error.response.data : error;
+  }
+};
+
+// ========== SALESFORCE ROUTES (with ensureSalesforceAccessToken) ==========
 
 // 1. Contact Query
-app.get('/api/contact', async (req, res) => {
+app.get('/api/contact', ensureSalesforceAccessToken, async (req, res) => {
   try {
     const email = req.query.email;
     const query = `SELECT Id, Name, AccountId FROM Contact WHERE Email = '${email}'`;
@@ -116,7 +120,7 @@ app.get('/api/contact', async (req, res) => {
 });
 
 // 2. Contact Create
-app.post('/api/contact', async (req, res) => {
+app.post('/api/contact', ensureSalesforceAccessToken, async (req, res) => {
   try {
     const data = await salesforceRequest('POST', 'sobjects/Contact', req.body);
     res.status(201).json(data);
@@ -126,7 +130,7 @@ app.post('/api/contact', async (req, res) => {
 });
 
 // 3. Account Update
-app.patch('/api/account/:id', async (req, res) => {
+app.patch('/api/account/:id', ensureSalesforceAccessToken, async (req, res) => {
   try {
     const accountId = req.params.id;
     const data = await salesforceRequest(
@@ -141,7 +145,7 @@ app.patch('/api/account/:id', async (req, res) => {
 });
 
 // 4. Opportunity Create
-app.post('/api/opportunity', async (req, res) => {
+app.post('/api/opportunity', ensureSalesforceAccessToken, async (req, res) => {
   try {
     const data = await salesforceRequest(
       'POST',
@@ -155,35 +159,43 @@ app.post('/api/opportunity', async (req, res) => {
 });
 
 // 5. Opportunity Update
-app.patch('/api/opportunity/:id', async (req, res) => {
-  try {
-    const opportunityId = req.params.id;
-    const data = await salesforceRequest(
-      'PATCH',
-      `sobjects/Opportunity/${opportunityId}`,
-      req.body
-    );
-    res.json(data);
-  } catch (error) {
-    res.status(500).json(error);
+app.patch(
+  '/api/opportunity/:id',
+  ensureSalesforceAccessToken,
+  async (req, res) => {
+    try {
+      const opportunityId = req.params.id;
+      const data = await salesforceRequest(
+        'PATCH',
+        `sobjects/Opportunity/${opportunityId}`,
+        req.body
+      );
+      res.json(data);
+    } catch (error) {
+      res.status(500).json(error);
+    }
   }
-});
+);
 
 // 6. DonationSummary Create
-app.post('/api/donationsummary', async (req, res) => {
-  try {
-    const data = await salesforceRequest(
-      'POST',
-      'sobjects/DonationSummary__c',
-      req.body
-    );
-    res.status(201).json(data);
-  } catch (error) {
-    res.status(500).json(error);
+app.post(
+  '/api/donationsummary',
+  ensureSalesforceAccessToken,
+  async (req, res) => {
+    try {
+      const data = await salesforceRequest(
+        'POST',
+        'sobjects/DonationSummary__c',
+        req.body
+      );
+      res.status(201).json(data);
+    } catch (error) {
+      res.status(500).json(error);
+    }
   }
-});
+);
 
-// Internal API for refreshing access token
+// 7. Internal API for refreshing access token (optional)
 app.post('/internal/refresh-token', async (req, res) => {
   try {
     await refreshAccessToken();
@@ -193,7 +205,7 @@ app.post('/internal/refresh-token', async (req, res) => {
   }
 });
 
-// Start the server
+// ========== START THE SERVER ==========
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
