@@ -3,6 +3,16 @@ const axios = require('axios');
 require('dotenv').config();
 const app = express();
 const PORT = 4242;
+const cors = require('cors');
+// Enable CORS for all routes
+app.use(cors());
+const corsOptions = {
+    origin: '*', // Allow all origins
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Allow all standard methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Specify allowed headers
+};
+
+app.use(cors(corsOptions));
 
 // Middleware to parse JSON
 app.use(express.json());
@@ -113,7 +123,8 @@ app.get('/api/contact', ensureSalesforceAccessToken, async (req, res) => {
       'GET',
       `query?q=${encodeURIComponent(query)}`
     );
-    res.json(data);
+  console.log("data-->",data);
+res.json(data);
   } catch (error) {
     res.status(500).json(error);
   }
@@ -123,6 +134,7 @@ app.get('/api/contact', ensureSalesforceAccessToken, async (req, res) => {
 app.post('/api/contact', ensureSalesforceAccessToken, async (req, res) => {
   try {
     const data = await salesforceRequest('POST', 'sobjects/Contact', req.body);
+console.log("data-->",data);
     res.status(201).json(data);
   } catch (error) {
     res.status(500).json(error);
@@ -139,6 +151,7 @@ app.patch('/api/account/:id', ensureSalesforceAccessToken, async (req, res) => {
       req.body
     );
     res.json(data);
+console.log("data-->",data);
   } catch (error) {
     res.status(500).json(error);
   }
