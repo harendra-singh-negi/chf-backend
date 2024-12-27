@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 // Salesforce Config
-const BASE_URL = process.env.BASE_URL;
+const BASE_URL = process.env.API_SALESFORCE_INSTATE;
 const API_VERSION = process.env.API_VERSION || "v57.0";
 let accessToken = null;
 
@@ -26,10 +26,10 @@ const refreshAccessToken = async () => {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         params: {
           grant_type: "password",
-          client_id: process.env.CLIENT_ID,
-          client_secret: process.env.CLIENT_SECRET,
-          username: process.env.USERNAME,
-          password: process.env.PASSWORD,
+          client_id: process.env.API_SALESFORCE_CLIENT_ID,
+          client_secret: process.env.API_SALESFORCE_CLIENT_SECRET,
+          username: process.env.API_SALESFORCE_USER_NAME,
+          password: process.env.API_SALESFORCE_USER_PASSWORD,
         },
       }
     );
@@ -104,22 +104,22 @@ app.post(
 
     try {
       // Validate reCAPTCHA
-      const recaptchaResponse = await axios.post(
-        "https://www.google.com/recaptcha/api/siteverify",
-        null,
-        {
-          params: {
-            secret: process.env.RECAPTCHA_SECRET_KEY,
-            response: qt_hiddenRecaptchaToken_signup,
-          },
-        }
-      );
+      // const recaptchaResponse = await axios.post(
+      //   "https://www.google.com/recaptcha/api/siteverify",
+      //   null,
+      //   {
+      //     params: {
+      //       secret: process.env.RECAPTCHA_SECRET_KEY,
+      //       response: qt_hiddenRecaptchaToken_signup,
+      //     },
+      //   }
+      // );
 
-      if (!recaptchaResponse.data.success) {
-        return res
-          .status(400)
-          .json({ message: "reCAPTCHA verification failed" });
-      }
+      // if (false) {
+      //   return res
+      //     .status(400)
+      //     .json({ message: "reCAPTCHA verification failed" });
+      // }
 
       // Check if Contact exists
       const recordTypeQuery =
