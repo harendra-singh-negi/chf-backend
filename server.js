@@ -95,7 +95,7 @@ app.post(
       usernumber,
       userpwd,
       userconfirmPassword,
-      qt_hiddenRecaptchaToken_signup,
+      // qt_hiddenRecaptchaToken_signup,
     } = req.body;
 
     if (userpwd !== userconfirmPassword) {
@@ -154,7 +154,9 @@ app.post(
         Activate_Link__c: activationLink,
       });
 
-      res.status(201).json({ message: "Registration successful" });
+      res
+        .status(201)
+        .json({ message: "Registration successful", success: true });
     } catch (error) {
       res.status(500).json({ message: "Registration failed", error });
     }
@@ -247,7 +249,7 @@ app.post(
   "/api/auth/reset-password",
   ensureSalesforceAccessToken,
   async (req, res) => {
-    const { uidb64, token, newPassword, confirmPassword } = req.body;
+    const { uidb64, newPassword, confirmPassword } = req.body;
 
     if (newPassword !== confirmPassword) {
       return res.status(400).json({ message: "Passwords do not match" });
@@ -255,6 +257,43 @@ app.post(
 
     try {
       const email = Buffer.from(uidb64, "base64").toString("utf-8");
+
+      const contactQuery = `SELECT Id FROM Contact WHERE Email = '${email}'`;
+      const contact = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(contactQuery)}`
+      );
+
+      if (contact.totalSize === 0) {
+        return res.status(404).json({ message: "Invalid reset link" });
+      }
+
+      await salesforceRequest(
+        "PATCH",
+        `sobjects/Contact/${contact.records[0].Id}`,
+        {
+          Password__c: encryptVal(newPassword),
+        }
+      );
+
+      res.status(200).json({ message: "Password reset successful" });
+    } catch (error) {
+      res.status(500).json({ message: "Reset password failed", error });
+    }
+  }
+);
+app.post(
+  "/api/auth/forgot-password",
+  ensureSalesforceAccessToken,
+  async (req, res) => {
+    const { email, newPassword, confirmPassword } = req.body;
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: "Passwords do not match" });
+    }
+
+    try {
+      // const email = Buffer.from(uidb64, "base64").toString("utf-8");
 
       const contactQuery = `SELECT Id FROM Contact WHERE Email = '${email}'`;
       const contact = await salesforceRequest(
@@ -305,14 +344,15 @@ app.post(
 
 app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
   const { email, password } = req.body;
+  console.log(email, password);
 
   try {
     // Validate reCAPTCHA
-    const recaptchaResponse = false;
+    // const recaptchaResponse = false;
 
-    if (!recaptchaResponse.data.success) {
-      return res.status(400).json({ message: "reCAPTCHA verification failed" });
-    }
+    // if (!recaptchaResponse.data.success) {
+    //   return res.status(400).json({ message: "reCAPTCHA verification failed" });
+    // }
 
     // Query Contact
     const contactQuery = `SELECT Id, Password__c, Is_Email_Verify__c, CHF_Account_Status__c FROM Contact WHERE Email = '${email}'`;
@@ -336,15 +376,16 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
         .json({ message: "Account not verified or approved" });
     }
 
-    const decryptedPassword = decryptVal(contactRecord.Password__c);
+    // const decryptedPassword = decryptVal(contactRecord.Password__c);
 
-    if (decryptedPassword !== password) {
+    if (contactRecord.Password__c !== password) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    res
-      .status(200)
-      .json({ message: "Login successful", userId: contactRecord.Id });
+    res.status(200).json({
+      message: "Login successful",
+      data: { userId: contactRecord.Id, email },
+    });
   } catch (error) {
     res.status(500).json({ message: "Login failed", error });
   }
