@@ -308,11 +308,11 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
 
   try {
     // Validate reCAPTCHA
-    const recaptchaResponse = false;
+    //const recaptchaResponse = false;
 
-    if (!recaptchaResponse.data.success) {
-      return res.status(400).json({ message: "reCAPTCHA verification failed" });
-    }
+//    if (!recaptchaResponse.data.success) {
+  //    return res.status(400).json({ message: "reCAPTCHA verification failed" });
+   // }
 
     // Query Contact
     const contactQuery = `SELECT Id, Password__c, Is_Email_Verify__c, CHF_Account_Status__c FROM Contact WHERE Email = '${email}'`;
@@ -336,9 +336,9 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
         .json({ message: "Account not verified or approved" });
     }
 
-    const decryptedPassword = decryptVal(contactRecord.Password__c);
+//    const decryptedPassword = decryptVal(contactRecord.Password__c);
 
-    if (decryptedPassword !== password) {
+    if (contactRecord.Password__c !== password) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
