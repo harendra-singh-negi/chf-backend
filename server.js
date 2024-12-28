@@ -7,6 +7,7 @@ require("dotenv").config();
 const app = express();
 const PORT = 4242;
 
+app.get("/health",(req,res)=>{res.json({"message":"Server Health is Fine"})})
 // Middleware
 app.use(cors());
 app.use(express.json());
