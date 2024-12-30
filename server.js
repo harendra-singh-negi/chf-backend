@@ -436,12 +436,18 @@ app.post("/create-payment-intent", async (req, res) => {
 app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
   try {
     const email = req.query.email;
-    const query = `SELECT * FROM Contact WHERE Email = '${email}'`;
+    const query = `SELECT ID, EMAIL, FIRSTNAME, LASTNAME, MOBILEPHONE, ACCOUNT.ID FROM Contact WHERE Email = '${email}'`;
     const data = await salesforceRequest(
       "GET",
       `query?q=${encodeURIComponent(query)}`
     );
-    res.json(data);
+    console.log("data",data?.records[0]?.Account)
+    const query1 = `SELECT ID, BILLINGSTREET, BILLINGCITY, BILLINGSTATE, BILLINGCOUNTRY, BILLINGPOSTALCODE FROM Account WHERE Id = '${data?.records[0]?.Account?.Id}'`
+    const data1 = await salesforceRequest(
+      "GET",
+      `query?q=${encodeURIComponent(query1)}`
+    );
+    res.json({data,data1});
   } catch (error) {
     res.status(500).json(error);
   }
