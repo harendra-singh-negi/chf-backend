@@ -338,13 +338,11 @@ app.post(
         MobilePhone: mobile,
       });
 
-      res
-        .status(200)
-        .json({
-          message: "Profile updated successfully",
-          success: true,
-          userData: { firstName, lastName, mobile },
-        });
+      res.status(200).json({
+        message: "Profile updated successfully",
+        success: true,
+        userData: { firstName, lastName, mobile },
+      });
     } catch (error) {
       res.status(500).json({ message: "Profile update failed", error });
     }
@@ -521,9 +519,13 @@ app.patch(
           ShippingStreet: req.body.shippingStreet,
         }
       );
-      res.json(data);
+      res.status(200).json({
+        message: "Address updated successfully",
+        success: true,
+        data,
+      });
     } catch (error) {
-      res.status(500).json(error);
+      res.status(500).json({message:"Address update failed. Please try again.",error});
     }
   }
 );
