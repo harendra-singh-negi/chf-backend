@@ -369,7 +369,6 @@ app.post(
       memMobile, // Member's mobile number
       memCreateAcc, // Flag indicating whether to create an account ("Yes"/"No")
       memDOB, // Member's date of birth
-      accountId, // ID of the associated account in Salesforce
     } = req.body;
 
     try {
@@ -381,11 +380,12 @@ app.post(
       );
 
       // Check if a contact already exists with the provided email
-      const contactQuery = `SELECT Id FROM Contact WHERE Account.RecordTypeId = '${recordType.records[0].Id}' AND Email = '${memEmailAddr}'`;
+      const contactQuery = `SELECT Id, Account.Id  FROM Contact WHERE Account.RecordTypeId = '${recordType.records[0].Id}' AND Email = '${memEmailAddr}'`;
       const contact = await salesforceRequest(
         "GET",
         `query?q=${encodeURIComponent(contactQuery)}`
       );
+      const accountId = contact?.records[0]?.Account?.Id;
       const memHidId = contact?.records[0]?.Id;
 
       if (memHidId && !memCreateAcc) {
