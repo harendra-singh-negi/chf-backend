@@ -327,10 +327,10 @@ app.post(
   "/api/profile/update",
   ensureSalesforceAccessToken,
   async (req, res) => {
-    const { firstName, lastName, mobile } = req.body;
+    const { firstName, lastName, mobile, Id } = req.body;
 
     try {
-      const contactId = req.headers["contact-id"];
+      const contactId = Id;
 
       await salesforceRequest("PATCH", `sobjects/Contact/${contactId}`, {
         FirstName: firstName,
@@ -338,7 +338,9 @@ app.post(
         MobilePhone: mobile,
       });
 
-      res.status(200).json({ message: "Profile updated successfully" });
+      res
+        .status(200)
+        .json({ message: "Profile updated successfully", success: true });
     } catch (error) {
       res.status(500).json({ message: "Profile update failed", error });
     }
