@@ -252,14 +252,14 @@ app.post(
   "/api/auth/reset-password",
   ensureSalesforceAccessToken,
   async (req, res) => {
-    const { uidb64, newPassword, confirmPassword } = req.body;
+    const { email, newPassword, confirmPassword } = req.body;
 
     if (newPassword !== confirmPassword) {
       return res.status(400).json({ message: "Passwords do not match" });
     }
 
     try {
-      const email = Buffer.from(uidb64, "base64").toString("utf-8");
+      // const email = Buffer.from(uidb64, "base64").toString("utf-8");
 
       const contactQuery = `SELECT Id FROM Contact WHERE Email = '${email}'`;
       const contact = await salesforceRequest(
@@ -268,20 +268,25 @@ app.post(
       );
 
       if (contact.totalSize === 0) {
-        return res.status(404).json({ message: "Invalid reset link" });
+        return res.status(404).json({ message: "Invalid credentials" });
       }
 
       await salesforceRequest(
         "PATCH",
         `sobjects/Contact/${contact.records[0].Id}`,
         {
-          Password__c: encryptVal(newPassword),
+          Password__c: newPassword,
+          // Password__c: encryptVal(newPassword),
         }
       );
 
-      res.status(200).json({ message: "Password reset successful" });
+      res
+        .status(200)
+        .json({ message: "Password reset successful", success: true });
     } catch (error) {
-      res.status(500).json({ message: "Reset password failed", error });
+      res
+        .status(500)
+        .json({ message: "Reset password failed", success: false, error });
     }
   }
 );
