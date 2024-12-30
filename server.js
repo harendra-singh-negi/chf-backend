@@ -487,19 +487,40 @@ app.post("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
 });
 
 // 3. Account Update
-app.patch("/api/account/:id", ensureSalesforceAccessToken, async (req, res) => {
-  try {
-    const accountId = req.params.id;
-    const data = await salesforceRequest(
-      "PATCH",
-      `sobjects/Account/${accountId}`,
-      req.body
-    );
-    res.json(data);
-  } catch (error) {
-    res.status(500).json(error);
+app.patch(
+  "/api/profile/address",
+  ensureSalesforceAccessToken,
+  async (req, res) => {
+    const { contactId } = req.body;
+    try {
+      // const accountId = req.params.id;
+      const query = `SELECT ID, ACCOUNT.ID FROM Contact WHERE Id = '${contactId}'`;
+      const contactData = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(query)}`
+      );
+      const data = await salesforceRequest(
+        "PATCH",
+        `sobjects/Account/${contactData?.records[0]?.Account?.Id}`,
+        {
+          BillingCity: req.body.billingCity,
+          BillingCountry: req.body.billingCountry,
+          BillingPostalCode: req.body.billingPostalCode,
+          BillingState: req.body.billingState,
+          BillingStreet: req.body.billingStreet,
+          ShippingCity: req.body.shippingCity,
+          ShippingCountry: req.body.shippingCountry,
+          ShippingPostalCode: req.body.shippingPostalCode,
+          ShippingState: req.body.shippingState,
+          ShippingStreet: req.body.shippingStreet,
+        }
+      );
+      res.json(data);
+    } catch (error) {
+      res.status(500).json(error);
+    }
   }
-});
+);
 
 // 4. Opportunity Create
 app.post("/api/opportunity", ensureSalesforceAccessToken, async (req, res) => {
