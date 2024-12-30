@@ -429,7 +429,7 @@ app.post("/create-payment-intent", async (req, res) => {
 app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
   try {
     const email = req.query.email;
-    const query = `SELECT Id, Name, AccountId FROM Contact WHERE Email = '${email}'`;
+    const query = `SELECT * FROM Contact WHERE Email = '${email}'`;
     const data = await salesforceRequest(
       "GET",
       `query?q=${encodeURIComponent(query)}`
@@ -438,6 +438,11 @@ app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
   } catch (error) {
     res.status(500).json(error);
   }
+});
+
+app.get("/", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.json({ user: "admin" });
 });
 
 // 2. Contact Create
