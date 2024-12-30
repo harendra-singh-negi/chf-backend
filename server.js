@@ -7,6 +7,7 @@ require("dotenv").config();
 const app = express();
 const PORT = 4242;
 
+app.get("/health",(req,res)=>{res.json({"message":"Server Health is Fine"})})
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -353,6 +354,11 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
     // if (!recaptchaResponse.data.success) {
     //   return res.status(400).json({ message: "reCAPTCHA verification failed" });
     // }
+    //const recaptchaResponse = false;
+
+//    if (!recaptchaResponse.data.success) {
+  //    return res.status(400).json({ message: "reCAPTCHA verification failed" });
+   // }
 
     // Query Contact
     const contactQuery = `SELECT Id, Password__c, Is_Email_Verify__c, CHF_Account_Status__c FROM Contact WHERE Email = '${email}'`;
@@ -377,6 +383,7 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
     }
 
     // const decryptedPassword = decryptVal(contactRecord.Password__c);
+//    const decryptedPassword = decryptVal(contactRecord.Password__c);
 
     if (contactRecord.Password__c !== password) {
       return res.status(401).json({ message: "Invalid credentials" });
