@@ -285,6 +285,7 @@ app.post(
     }
   }
 );
+
 app.post(
   "/api/auth/forgot-password",
   ensureSalesforceAccessToken,
@@ -345,6 +346,121 @@ app.post(
       });
     } catch (error) {
       res.status(500).json({ message: "Profile update failed", error });
+    }
+  }
+);
+
+// 8. Member Info Update/Create
+app.post(
+  "/api/profile/add-member",
+  ensureSalesforceAccessToken,
+  async (req, res) => {
+    const {
+      // memHidId, // Member's hidden ID (used for updating existing members)
+      relName, // Relationship of the member to the account (e.g., "Spouse", "Child")
+      memFname, // Member's first name
+      memLname, // Member's last name
+      memEmailAddr, // Member's email address
+      memMobile, // Member's mobile number
+      memCreateAcc, // Flag indicating whether to create an account ("Yes"/"No")
+      memDOB, // Member's date of birth
+      accountId, // ID of the associated account in Salesforce
+    } = req.body;
+
+    try {
+      // Get the RecordType ID for "Household Account"
+      const recordTypeQuery = `SELECT Id FROM RecordType WHERE Name = 'Household Account'`;
+      const recordType = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(recordTypeQuery)}`
+      );
+
+      // Check if a contact already exists with the provided email
+      const contactQuery = `SELECT Id FROM Contact WHERE Account.RecordTypeId = '${recordType.records[0].Id}' AND Email = '${memEmailAddr}'`;
+      const contact = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(contactQuery)}`
+      );
+      const memHidId = contact?.records[0]?.Id;
+
+      if (memHidId && memCreateAcc === "No") {
+        // If member ID is provided, update the existing contact
+        const updateData = {
+          FirstName: memFname,
+          LastName: memLname,
+          MobilePhone: memMobile,
+          Member_Relationship__c: relName,
+          Member_Account__c: memCreateAcc === "Yes", // Boolean conversion for account creation flag
+          Birthdate: memDOB, // Format: YYYY-MM-DD
+        };
+
+        await salesforceRequest(
+          "PATCH",
+          `sobjects/Contact/${memHidId}`,
+          updateData
+        );
+      } else if (contact.totalSize === 0 && memCreateAcc === "Yes") {
+        // If no member ID and email is not already in use, create a new contact
+        const createData = {
+          FirstName: memFname,
+          LastName: memLname,
+          Email: memEmailAddr,
+          MobilePhone: memMobile,
+          AccountId: accountId, // Associate the member with the provided account ID
+          Member_Relationship__c: relName,
+          Member_Account__c: memCreateAcc === "Yes",
+          Birthdate: memDOB,
+        };
+
+        await salesforceRequest("POST", "sobjects/Contact", createData);
+      } else {
+        // Email already exists in Salesforce
+        return res.status(400).json({ message: "Email already exists." });
+      }
+
+      res.status(200).json({ message: "Member info processed successfully." });
+    } catch (error) {
+      res.status(500).json({ message: "Error processing member info.", error });
+    }
+  }
+);
+
+// 9. Delete Member
+app.post(
+  "/api/delete-member",
+  ensureSalesforceAccessToken,
+  async (req, res) => {
+    const {
+      memberId, // ID of the member to be deleted
+      contactId, // ID of the account associated with the member
+    } = req.body;
+
+    const query = `SELECT ID, ACCOUNT.ID FROM Contact WHERE Id = '${contactId}'`;
+    const contactData = await salesforceRequest(
+      "GET",
+      `query?q=${encodeURIComponent(query)}`
+    );
+
+    try {
+      // Update the member's status to "Reject" and clear their email
+      await salesforceRequest("PATCH", `sobjects/Contact/${memberId}`, {
+        CHF_Account_Status__c: "Reject", // Mark the member as rejected
+        Email: "", // Remove email from the member record
+      });
+
+      // Fetch the list of remaining approved members for the account
+      const memberQuery = `SELECT Id, FirstName, LastName FROM Contact WHERE AccountId = '${contactData?.records[0]?.Account?.Id}' AND CHF_Account_Status__c = 'Approve'`;
+      const updatedMembers = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(memberQuery)}`
+      );
+
+      res.status(200).json({
+        message: "Member deleted successfully.",
+        members: updatedMembers.records, // Return the updated list of members
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Error deleting member.", error });
     }
   }
 );
@@ -525,7 +641,9 @@ app.patch(
         data,
       });
     } catch (error) {
-      res.status(500).json({message:"Address update failed. Please try again.",error});
+      res
+        .status(500)
+        .json({ message: "Address update failed. Please try again.", error });
     }
   }
 );
