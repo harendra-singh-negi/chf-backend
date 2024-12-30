@@ -340,7 +340,11 @@ app.post(
 
       res
         .status(200)
-        .json({ message: "Profile updated successfully", success: true });
+        .json({
+          message: "Profile updated successfully",
+          success: true,
+          userData: { firstName, lastName, mobile },
+        });
     } catch (error) {
       res.status(500).json({ message: "Profile update failed", error });
     }
