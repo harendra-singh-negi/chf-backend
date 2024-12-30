@@ -388,14 +388,14 @@ app.post(
       );
       const memHidId = contact?.records[0]?.Id;
 
-      if (memHidId && memCreateAcc === "No") {
+      if (memHidId && !memCreateAcc) {
         // If member ID is provided, update the existing contact
         const updateData = {
           FirstName: memFname,
           LastName: memLname,
           MobilePhone: memMobile,
           Member_Relationship__c: relName,
-          Member_Account__c: memCreateAcc === "Yes", // Boolean conversion for account creation flag
+          Member_Account__c: memCreateAcc, // Boolean conversion for account creation flag
           Birthdate: memDOB, // Format: YYYY-MM-DD
         };
 
@@ -404,7 +404,7 @@ app.post(
           `sobjects/Contact/${memHidId}`,
           updateData
         );
-      } else if (contact.totalSize === 0 && memCreateAcc === "Yes") {
+      } else if (contact.totalSize === 0 && memCreateAcc) {
         // If no member ID and email is not already in use, create a new contact
         const createData = {
           FirstName: memFname,
@@ -413,7 +413,7 @@ app.post(
           MobilePhone: memMobile,
           AccountId: accountId, // Associate the member with the provided account ID
           Member_Relationship__c: relName,
-          Member_Account__c: memCreateAcc === "Yes",
+          Member_Account__c: memCreateAcc,
           Birthdate: memDOB,
         };
 
@@ -422,23 +422,19 @@ app.post(
         // Email already exists in Salesforce
         return res
           .status(400)
-          .json({ message: "Email already exists.", success: false });
+          .json({ message: "Email does not exists.", success: false });
       }
 
-      res
-        .status(200)
-        .json({
-          message: "Member info processed successfully.",
-          success: true,
-        });
+      res.status(200).json({
+        message: "Member info processed successfully.",
+        success: true,
+      });
     } catch (error) {
-      res
-        .status(500)
-        .json({
-          message: "Error processing member info.",
-          error,
-          success: false,
-        });
+      res.status(500).json({
+        message: "Error processing member info.",
+        error,
+        success: false,
+      });
     }
   }
 );
