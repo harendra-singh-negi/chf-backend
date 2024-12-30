@@ -7,7 +7,9 @@ require("dotenv").config();
 const app = express();
 const PORT = 4242;
 
-app.get("/health",(req,res)=>{res.json({"message":"Server Health is Fine"})})
+app.get("/health", (req, res) => {
+  res.json({ message: "Server Health is Fine" });
+});
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -356,9 +358,9 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
     // }
     //const recaptchaResponse = false;
 
-//    if (!recaptchaResponse.data.success) {
-  //    return res.status(400).json({ message: "reCAPTCHA verification failed" });
-   // }
+    //    if (!recaptchaResponse.data.success) {
+    //    return res.status(400).json({ message: "reCAPTCHA verification failed" });
+    // }
 
     // Query Contact
     const contactQuery = `SELECT Id, Password__c, Is_Email_Verify__c, CHF_Account_Status__c FROM Contact WHERE Email = '${email}'`;
@@ -383,7 +385,7 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
     }
 
     // const decryptedPassword = decryptVal(contactRecord.Password__c);
-//    const decryptedPassword = decryptVal(contactRecord.Password__c);
+    //    const decryptedPassword = decryptVal(contactRecord.Password__c);
 
     if (contactRecord.Password__c !== password) {
       return res.status(401).json({ message: "Invalid credentials" });
@@ -441,13 +443,29 @@ app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
       "GET",
       `query?q=${encodeURIComponent(query)}`
     );
-    console.log("data",data?.records[0]?.Account)
-    const query1 = `SELECT ID, BILLINGSTREET, BILLINGCITY, BILLINGSTATE, BILLINGCOUNTRY, BILLINGPOSTALCODE FROM Account WHERE Id = '${data?.records[0]?.Account?.Id}'`
+    console.log("data", data?.records[0]?.Account);
+    const query1 = `SELECT ID, BILLINGSTREET, BILLINGCITY, BILLINGSTATE, BILLINGCOUNTRY, BILLINGPOSTALCODE, SHIPPINGSTREET,SHIPPINGCITY,SHIPPINGCOUNTRY, SHIPPINGSTATE, SHIPPINGPOSTALCODE FROM Account WHERE Id = '${data?.records[0]?.Account?.Id}'`;
     const data1 = await salesforceRequest(
       "GET",
       `query?q=${encodeURIComponent(query1)}`
     );
-    res.json({data,data1});
+
+    res.json({
+      firstName: data?.records[0]?.FirstName,
+      lastName: data?.records[0]?.LastName,
+      email: data?.records[0]?.Email,
+      mobile: data?.records[0]?.MobilePhone,
+      billingStreet: data1?.records[0]?.BillingStreet,
+      billingCity: data1?.records[0]?.BillingCity,
+      billingState: data1?.records[0]?.BillingState,
+      billingCountry: data1?.records[0]?.BillingCountry,
+      billingPostalCode: data1?.records[0]?.BillingPostalCode,
+      shippingStreet: data1?.records[0]?.ShippingStreet,
+      shippingCity: data1?.records[0]?.ShippingCity,
+      shippingCountry: data1?.records[0]?.ShippingCountry,
+      shippingState: data1?.records[0]?.ShippingState,
+      shippingPostalCode: data1?.records[0]?.ShippingPostalCode,
+    });
   } catch (error) {
     res.status(500).json(error);
   }
