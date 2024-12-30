@@ -420,12 +420,25 @@ app.post(
         await salesforceRequest("POST", "sobjects/Contact", createData);
       } else {
         // Email already exists in Salesforce
-        return res.status(400).json({ message: "Email already exists." });
+        return res
+          .status(400)
+          .json({ message: "Email already exists.", success: false });
       }
 
-      res.status(200).json({ message: "Member info processed successfully." });
+      res
+        .status(200)
+        .json({
+          message: "Member info processed successfully.",
+          success: true,
+        });
     } catch (error) {
-      res.status(500).json({ message: "Error processing member info.", error });
+      res
+        .status(500)
+        .json({
+          message: "Error processing member info.",
+          error,
+          success: false,
+        });
     }
   }
 );
