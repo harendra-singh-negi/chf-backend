@@ -185,7 +185,9 @@ app.get(
       );
 
       if (contact.totalSize === 0 || contact.records[0].Is_Email_Verify__c) {
-        return res.status(400).json({ message: "Inavlid Link.", success: false, error: error });
+        return res
+          .status(400)
+          .json({ message: "Inavlid Link.", success: false, error: error });
       }
 
       await salesforceRequest(
@@ -251,9 +253,11 @@ app.post(
         Reset_Pwd_Link__c: resetPwdLink,
       });
 
-      res
-        .status(200)
-        .json({ message: "Password reset link is sent to the regesterd email", success: true, link: resetPwdLink });
+      res.status(200).json({
+        message: "Password reset link is sent to the regesterd email",
+        success: true,
+        link: resetPwdLink,
+      });
     } catch (error) {
       res
         .status(500)
@@ -558,6 +562,177 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
   }
 });
 
+// 10. Donations Initial opportunity creation
+app.post(
+  "/api/donate/create",
+  ensureSalesforceAccessToken,
+  async (req, res) => {
+    const {
+      donAmt, // Total donation amount
+      donorName, // Full name of the donor
+      displayName, // Display name for the donation record
+      donorEmail, // Donor's email
+      donorMobile, // Donor's mobile number
+      donorBillSt, // Donor's billing street
+      donorCity, // Donor's billing city
+      donorState, // Donor's billing state
+      donorZip, // Donor's billing zip/postal code
+      donorCountry, // Donor's billing country
+      tnxId, // Transaction ID or payment mode
+      donationCategories, // Array of donation category objects
+    } = req.body;
+
+    let accountId = req.session?.accountId || null;
+    let donorFirstName = "";
+    let donorLastName = "";
+    let contRecId = null;
+    let stageName = "Payment Received";
+    let Transaction_ID__c = tnxId;
+
+    try {
+      const todayDate = new Date().toISOString().split("T")[0]; // Format: YYYY-MM-DD
+
+      // Split donor name into first and last name
+      if (donorName.includes(" ")) {
+        const nameParts = donorName.split(" ");
+        donorLastName = nameParts.pop();
+        donorFirstName = nameParts.join(" ");
+      } else {
+        donorFirstName = donorName;
+        donorLastName = donorName;
+      }
+
+      // Adjust stage name based on transaction ID
+      if (tnxId === "Check") {
+        stageName = "Payment Pending";
+        Transaction_ID__c = `Check-${generateRandomString(12)}`;
+      } else if (tnxId === "Zelle") {
+        stageName = "Payment Pending";
+        Transaction_ID__c = `Zelle-${generateRandomString(13)}`;
+      }
+
+      // Establish Salesforce connection
+      // const sfcon = await salesforceConnection();
+
+      // Check if donor exists
+      const contactQuery = `SELECT Id, Name, AccountId FROM Contact WHERE Email = '${donorEmail}'`;
+      const contact = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(contactQuery)}`
+      );
+
+      if (contact.totalSize > 0) {
+        const donorRecord = contact.records[0];
+        accountId = donorRecord.AccountId;
+        contRecId = donorRecord.Id;
+      } else {
+        // Create new donor contact
+        const contactData = {
+          FirstName: donorFirstName,
+          LastName: donorLastName,
+          Email: donorEmail,
+          MobilePhone: donorMobile,
+        };
+        const newContact = await salesforceRequest(
+          "POST",
+          "sobjects/Contact",
+          contactData
+        );
+        contRecId = newContact.id;
+
+        // Update donor's account with billing details
+        const accountQuery = `SELECT AccountId FROM Contact WHERE Id = '${newContact.id}'`;
+        const account = await salesforceRequest(
+          "GET",
+          `query?q=${encodeURIComponent(accountQuery)}`
+        );
+        accountId = account.records[0].AccountId;
+
+        const accountData = {
+          BillingStreet: donorBillSt,
+          BillingCity: donorCity,
+          BillingState: donorState,
+          BillingPostalCode: donorZip,
+          BillingCountry: donorCountry,
+        };
+        await salesforceRequest(
+          "PATCH",
+          `sobjects/Account/${accountId}`,
+          accountData
+        );
+      }
+
+      // Create donation opportunity
+      const recordTypeQuery = `SELECT Id FROM RecordType WHERE Name = 'Donation'`;
+      const recordType = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(recordTypeQuery)}`
+      );
+
+      const opportunityData = {
+        AccountId: accountId,
+        Amount: donAmt,
+        StageName: stageName,
+        CloseDate: todayDate,
+        Name: displayName,
+        Donor__c: contRecId,
+        RecordTypeId: recordType.records[0].Id,
+        Description: donationCategories?.toString(),
+      };
+      const opportunity = await salesforceRequest(
+        "POST",
+        "sobjects/Opportunity",
+        opportunityData
+      );
+
+      // Process donation categories
+      for (const category of donationCategories) {
+        const { name, amount, quantity, remark } = category;
+
+        if (amount) {
+          const donationSummaryData = {
+            Opportunity__c: opportunity.id,
+            Campaign_Name__c: name,
+            Amount__c: amount,
+            Quantity__c: quantity,
+            Remark__c: remark,
+          };
+          await salesforceRequest(
+            "POST",
+            "sobjects/DonationSummary__c",
+            donationSummaryData
+          );
+        }
+      }
+
+      // Update opportunity with transaction details
+      await salesforceRequest(
+        "PATCH",
+        `sobjects/Opportunity/${opportunity.id}`,
+        {
+          Transaction_ID__c: Transaction_ID__c,
+          EmailTriggered__c: false,
+        }
+      );
+
+      res.status(200).json({ message: "Donation processed successfully." });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to process donation.", error });
+    }
+  }
+);
+
+// Helper function to generate a random string
+const generateRandomString = (length) => {
+  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
+};
+
 // ========== STRIPE CODE (UNCHANGED) ==========
 const stripe = require("stripe")(`${process.env.VITE_STRIPE_CLIENT_SECRET}`);
 
@@ -694,7 +869,7 @@ app.post("/api/opportunity", ensureSalesforceAccessToken, async (req, res) => {
       "sobjects/Opportunity",
       req.body
     );
-    res.status(201).json({data, success: true});
+    res.status(201).json({ data, success: true });
   } catch (error) {
     res.status(500).json(error);
   }
