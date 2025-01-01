@@ -185,7 +185,7 @@ app.get(
       );
 
       if (contact.totalSize === 0 || contact.records[0].Is_Email_Verify__c) {
-        return res.status(400).send("Invalid activation link");
+        return res.status(400).json({ message: "Inavlid Link.", success: false, error: error });
       }
 
       await salesforceRequest(
@@ -253,7 +253,7 @@ app.post(
 
       res
         .status(200)
-        .json({ message: "Password reset link sent", success: true });
+        .json({ message: "Password reset link is sent to the regesterd email", success: true, link: resetPwdLink });
     } catch (error) {
       res
         .status(500)
@@ -309,14 +309,14 @@ app.post(
   "/api/auth/forgot-password",
   ensureSalesforceAccessToken,
   async (req, res) => {
-    const { email, newPassword, confirmPassword } = req.body;
+    const { uidb64, newPassword, confirmPassword } = req.body;
 
     if (newPassword !== confirmPassword) {
       return res.status(400).json({ message: "Passwords do not match" });
     }
 
     try {
-      // const email = Buffer.from(uidb64, "base64").toString("utf-8");
+      const email = Buffer.from(uidb64, "base64").toString("utf-8");
 
       const contactQuery = `SELECT Id FROM Contact WHERE Email = '${email}'`;
       const contact = await salesforceRequest(
