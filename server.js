@@ -611,9 +611,6 @@ app.post(
         Transaction_ID__c = `Zelle-${generateRandomString(13)}`;
       }
 
-      // Establish Salesforce connection
-      // const sfcon = await salesforceConnection();
-
       // Check if donor exists
       const contactQuery = `SELECT Id, Name, AccountId FROM Contact WHERE Email = '${donorEmail}'`;
       const contact = await salesforceRequest(
@@ -677,7 +674,7 @@ app.post(
         Name: displayName,
         Donor__c: contRecId,
         RecordTypeId: recordType.records[0].Id,
-        Description: donationCategories?.toString(),
+        // Description: donationCategories?.toString(),
       };
       const opportunity = await salesforceRequest(
         "POST",
@@ -686,24 +683,35 @@ app.post(
       );
 
       // Process donation categories
-      for (const category of donationCategories) {
-        const { name, amount, quantity, remark } = category;
+      // for (const category of donationCategories) {
+      //   const { name, amount, quantity, remark } = category;
 
-        if (amount) {
-          const donationSummaryData = {
-            Opportunity__c: opportunity.id,
-            Campaign_Name__c: name,
-            Amount__c: amount,
-            Quantity__c: quantity,
-            Remark__c: remark,
-          };
-          await salesforceRequest(
-            "POST",
-            "sobjects/DonationSummary__c",
-            donationSummaryData
-          );
-        }
-      }
+      //   if (amount) {
+      //     const donationSummaryData = {
+      //       Opportunity__c: opportunity.id,
+      //       Campaign_Name__c: name,
+      //       Amount__c: amount,
+      //       Quantity__c: quantity,
+      //       Remark__c: remark,
+      //     };
+      //     await salesforceRequest(
+      //       "POST",
+      //       "sobjects/DonationSummary__c",
+      //       donationSummaryData
+      //     );
+      //   }
+      // }
+      const donationSummaries = donationCategories.map((category) => ({
+        Opportunity__c: opportunity.id,
+        Campaign_Name__c: category.name,
+        Amount__c: category.amount,
+        Quantity__c: category.quantity,
+        Remark__c: category.remark,
+      }));
+
+      await salesforceRequest("POST", "composite/sobjects", {
+        records: donationSummaries,
+      });
 
       // Update opportunity with transaction details
       await salesforceRequest(
@@ -725,12 +733,12 @@ app.post(
 
 // Helper function to generate a random string
 const generateRandomString = (length) => {
-  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  return result;
+  return Array(length)
+    .fill(null)
+    .map(() =>
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ".charAt(Math.floor(Math.random() * 26))
+    )
+    .join("");
 };
 
 // ========== STRIPE CODE (UNCHANGED) ==========
