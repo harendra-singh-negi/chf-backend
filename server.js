@@ -17,6 +17,7 @@ app.use(express.json());
 // Salesforce Config
 const BASE_URL = process.env.API_SALESFORCE_INSTATE;
 const API_VERSION = process.env.API_VERSION || "v57.0";
+const DOMAIN = process.env.DOMAIN || "localhost:5173";
 let accessToken = null;
 
 // Salesforce Access Token Refresh
@@ -143,23 +144,26 @@ app.post(
       }
 
       // Create Contact
-      const domain = req.get("host");
-      const activationLink = `http://${domain}/activate/${Buffer.from(
+      // const domain = req.get("host");
+      const activationLink = `http://${DOMAIN}/activate/${Buffer.from(
         emailid
       ).toString("base64")}/${generateActivationToken(emailid)}`;
 
-      await salesforceRequest("POST", "sobjects/Contact", {
+      const data = await salesforceRequest("POST", "sobjects/Contact", {
         FirstName: firstname,
         LastName: lastname,
         Email: emailid,
-        MobilePhone: usernumber,
+        Phone: usernumber,
         Password__c: encryptVal(userpwd),
         Activate_Link__c: activationLink,
       });
 
-      res
-        .status(201)
-        .json({ message: "Registration successful", success: true });
+      res.status(201).json({
+        message: "Registration successful",
+        success: true,
+        data,
+        activationLink,
+      });
     } catch (error) {
       res.status(500).json({ message: "Registration failed", error });
     }
@@ -192,9 +196,15 @@ app.get(
         }
       );
 
-      res.redirect("/login");
+      // res.redirect("/login");
+      res.status(201).json({
+        message: "Email activation successful",
+        success: true,
+      });
     } catch (error) {
-      res.status(500).send("Activation failed");
+      res
+        .status(500)
+        .json({ message: "Activation failed", success: false, error: error });
     }
   }
 );
@@ -232,8 +242,8 @@ app.post(
         return res.status(403).json({ message: "Email not verified" });
       }
 
-      const domain = req.get("host");
-      const resetPwdLink = `http://${domain}/reset-password/${Buffer.from(
+      // const domain = req.get("host");
+      const resetPwdLink = `http://${DOMAIN}/reset-password/${Buffer.from(
         forgot_email
       ).toString("base64")}/${generateActivationToken(forgot_email)}`;
 
@@ -241,9 +251,13 @@ app.post(
         Reset_Pwd_Link__c: resetPwdLink,
       });
 
-      res.status(200).json({ message: "Password reset link sent" });
+      res
+        .status(200)
+        .json({ message: "Password reset link sent", success: true });
     } catch (error) {
-      res.status(500).json({ message: "Check email failed", error });
+      res
+        .status(500)
+        .json({ message: "Check email failed", error, success: false });
     }
   }
 );
@@ -275,8 +289,8 @@ app.post(
         "PATCH",
         `sobjects/Contact/${contact.records[0].Id}`,
         {
-          Password__c: newPassword,
-          // Password__c: encryptVal(newPassword),
+          // Password__c: newPassword,
+          Password__c: encryptVal(newPassword),
         }
       );
 
@@ -322,9 +336,13 @@ app.post(
         }
       );
 
-      res.status(200).json({ message: "Password reset successful" });
+      res
+        .status(200)
+        .json({ message: "Password reset successful", success: true });
     } catch (error) {
-      res.status(500).json({ message: "Reset password failed", error });
+      res
+        .status(500)
+        .json({ message: "Reset password failed", error, success: false });
     }
   }
 );
@@ -350,7 +368,9 @@ app.post(
         userData: { firstName, lastName, mobile },
       });
     } catch (error) {
-      res.status(500).json({ message: "Profile update failed", error });
+      res
+        .status(500)
+        .json({ message: "Profile update failed", error, success: false });
     }
   }
 );
@@ -472,9 +492,12 @@ app.post(
       res.status(200).json({
         message: "Member deleted successfully.",
         members: updatedMembers.records, // Return the updated list of members
+        success: true,
       });
     } catch (error) {
-      res.status(500).json({ message: "Error deleting member.", error });
+      res
+        .status(500)
+        .json({ message: "Error deleting member.", error, success: false });
     }
   }
 );
@@ -518,10 +541,11 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
         .json({ message: "Account not verified or approved" });
     }
 
-    // const decryptedPassword = decryptVal(contactRecord.Password__c);
+    const decryptedPassword = decryptVal(contactRecord.Password__c);
     //    const decryptedPassword = decryptVal(contactRecord.Password__c);
+    // console.log("decryptedPassword", decryptedPassword);
 
-    if (contactRecord.Password__c !== password) {
+    if (decryptedPassword !== password) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -670,7 +694,7 @@ app.post("/api/opportunity", ensureSalesforceAccessToken, async (req, res) => {
       "sobjects/Opportunity",
       req.body
     );
-    res.status(201).json(data);
+    res.status(201).json({data, success: true});
   } catch (error) {
     res.status(500).json(error);
   }
