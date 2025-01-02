@@ -723,10 +723,10 @@ app.post(
         }
       );
 
-      res.status(200).json({ message: "Donation processed successfully." });
+      res.status(200).json({ message: "Donation processed successfully." , success: true});
     } catch (error) {
       console.error(error);
-      res.status(500).json({ message: "Failed to process donation.", error });
+      res.status(500).json({ message: "Failed to process donation.", error, success: false });
     }
   }
 );
