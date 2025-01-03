@@ -586,7 +586,7 @@ app.post(
     let donorFirstName = "";
     let donorLastName = "";
     let contRecId = null;
-    let stageName = "Payment Received";
+    let stageName = "Payment Pending";
     let Transaction_ID__c = tnxId;
 
     try {
@@ -603,12 +603,12 @@ app.post(
       }
 
       // Adjust stage name based on transaction ID
-      if (tnxId === "Check") {
+      if (tnxId === "cheque") {
         stageName = "Payment Pending";
-        Transaction_ID__c = `Check-${generateRandomString(12)}`;
-      } else if (tnxId === "Zelle") {
+        Transaction_ID__c = `cheque-${generateRandomString(12)}`;
+      } else if (tnxId === "zelle") {
         stageName = "Payment Pending";
-        Transaction_ID__c = `Zelle-${generateRandomString(13)}`;
+        Transaction_ID__c = `zelle-${generateRandomString(13)}`;
       }
 
       // Check if donor exists
@@ -779,7 +779,7 @@ app.post("/create-payment-intent", async (req, res) => {
 app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
   try {
     const email = req.query.email;
-    const query = `SELECT ID, EMAIL, FIRSTNAME, LASTNAME, MOBILEPHONE, ACCOUNT.ID FROM Contact WHERE Email = '${email}'`;
+    const query = `SELECT ID, EMAIL, FIRSTNAME, LASTNAME, PHONE, ACCOUNT.ID FROM Contact WHERE Email = '${email}'`;
     const data = await salesforceRequest(
       "GET",
       `query?q=${encodeURIComponent(query)}`
@@ -795,7 +795,7 @@ app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
       firstName: data?.records[0]?.FirstName,
       lastName: data?.records[0]?.LastName,
       email: data?.records[0]?.Email,
-      mobile: data?.records[0]?.MobilePhone,
+      mobile: data?.records[0]?.Phone,
       billingStreet: data1?.records[0]?.BillingStreet,
       billingCity: data1?.records[0]?.BillingCity,
       billingState: data1?.records[0]?.BillingState,
