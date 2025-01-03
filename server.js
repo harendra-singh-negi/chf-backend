@@ -750,6 +750,7 @@ app.post(
             Quantity__c: quantity,
             Remark__c: remark,
           };
+
           await salesforceRequest(
             "POST",
             "sobjects/DonationSummary__c",
@@ -854,6 +855,14 @@ app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
       "GET",
       `query?q=${encodeURIComponent(query1)}`
     );
+    const sameAddress =
+      data1?.records[0]?.BillingStreet === data1?.records[0]?.ShippingStreet &&
+      data1?.records[0]?.BillingCity === data1?.records[0]?.ShippingCity &&
+      data1?.records[0]?.BillingCountry ===
+        data1?.records[0]?.ShippingCountry &&
+      data1?.records[0]?.BillingState === data1?.records[0]?.ShippingState &&
+      data1?.records[0]?.BillingPostalCode ===
+        data1?.records[0]?.ShippingPostalCode;
 
     res.json({
       firstName: data?.records[0]?.FirstName,
@@ -870,6 +879,7 @@ app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
       shippingCountry: data1?.records[0]?.ShippingCountry,
       shippingState: data1?.records[0]?.ShippingState,
       shippingPostalCode: data1?.records[0]?.ShippingPostalCode,
+      sameAddress,
     });
   } catch (error) {
     res.status(500).json(error);
