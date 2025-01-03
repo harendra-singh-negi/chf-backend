@@ -635,6 +635,7 @@ app.post(
     let donorLastName = "";
     let contRecId = null;
     let stageName = "Payment Pending";
+    let stageName = "Payment Pending";
     let Transaction_ID__c = tnxId;
 
     try {
@@ -651,12 +652,12 @@ app.post(
       }
 
       // Adjust stage name based on transaction ID
-      if (tnxId === "Check") {
+      if (tnxId === "cheque") {
         stageName = "Payment Pending";
-        Transaction_ID__c = `Check-${generateRandomString(12)}`;
-      } else if (tnxId === "Zelle") {
+        Transaction_ID__c = `cheque-${generateRandomString(12)}`;
+      } else if (tnxId === "zelle") {
         stageName = "Payment Pending";
-        Transaction_ID__c = `Zelle-${generateRandomString(13)}`;
+        Transaction_ID__c = `zelle-${generateRandomString(13)}`;
       }
 
       // Check if donor exists
@@ -773,16 +774,10 @@ app.post(
         }
       );
 
-      res
-        .status(200)
-        .json({ message: "Donation processed successfully.", success: true });
+      res.status(200).json({ message: "Donation processed successfully." , success: true});
     } catch (error) {
       console.error(error);
-      res.status(500).json({
-        message: "Failed to process donation.",
-        success: false,
-        error,
-      });
+      res.status(500).json({ message: "Failed to process donation.", error, success: false });
     }
   }
 );
