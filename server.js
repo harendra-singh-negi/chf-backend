@@ -12,7 +12,14 @@ app.get("/health", (req, res) => {
 });
 // Middleware
 app.use(cors());
-app.use(express.json());
+const corsOptions = {
+  origin: "*", // Allow all origins
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE", // Allow all standard methods
+  allowedHeaders: ["Content-Type", "Authorization"], // Specify allowed headers
+};
+
+app.use(cors(corsOptions));
+// app.use(express.json());
 
 // Salesforce Config
 const BASE_URL = process.env.API_SALESFORCE_INSTATE;
@@ -774,10 +781,18 @@ app.post(
         }
       );
 
-      res.status(200).json({ message: "Donation processed successfully." , success: true});
+      res
+        .status(200)
+        .json({ message: "Donation processed successfully.", success: true });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ message: "Failed to process donation.", error, success: false });
+      res
+        .status(500)
+        .json({
+          message: "Failed to process donation.",
+          error,
+          success: false,
+        });
     }
   }
 );
