@@ -642,7 +642,7 @@ app.post(
     let donorLastName = "";
     let contRecId = null;
     let stageName = "Payment Pending";
-    let stageName = "Payment Pending";
+    // let stageName = "Payment Pending";
     let Transaction_ID__c = tnxId;
 
     try {
@@ -786,13 +786,11 @@ app.post(
         .json({ message: "Donation processed successfully.", success: true });
     } catch (error) {
       console.error(error);
-      res
-        .status(500)
-        .json({
-          message: "Failed to process donation.",
-          error,
-          success: false,
-        });
+      res.status(500).json({
+        message: "Failed to process donation.",
+        error,
+        success: false,
+      });
     }
   }
 );
