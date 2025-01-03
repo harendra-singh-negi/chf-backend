@@ -12,14 +12,14 @@ app.get("/health", (req, res) => {
 });
 // Middleware
 app.use(cors());
-const corsOptions = {
-  origin: "*", // Allow all origins
-  methods: "GET,HEAD,PUT,PATCH,POST,DELETE", // Allow all standard methods
-  allowedHeaders: ["Content-Type", "Authorization"], // Specify allowed headers
-};
+// const corsOptions = {
+//   origin: "*", // Allow all origins
+//   methods: "GET,HEAD,PUT,PATCH,POST,DELETE", // Allow all standard methods
+//   allowedHeaders: ["Content-Type", "Authorization"], // Specify allowed headers
+// };
 
-app.use(cors(corsOptions));
-// app.use(express.json());
+// app.use(cors(corsOptions));
+app.use(express.json());
 
 // Salesforce Config
 const BASE_URL = process.env.API_SALESFORCE_INSTATE;
@@ -562,6 +562,7 @@ app.post(
 );
 
 app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
+  console.log("req.body", req.body);
   const { email, password } = req.body;
   console.log(email, password);
 
@@ -584,12 +585,14 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
       "GET",
       `query?q=${encodeURIComponent(contactQuery)}`
     );
+    console.log(contact);
 
     if (contact.totalSize === 0) {
       return res.status(404).json({ message: "User not found" });
     }
 
     const contactRecord = contact.records[0];
+    console.log(contactRecord);
 
     if (
       contactRecord.CHF_Account_Status__c !== "Approve" ||
@@ -602,11 +605,21 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
 
     const decryptedPassword = decryptVal(contactRecord.Password__c);
     //    const decryptedPassword = decryptVal(contactRecord.Password__c);
-    // console.log("decryptedPassword", decryptedPassword);
+    console.log("decryptedPassword", decryptedPassword);
 
     if (decryptedPassword !== password) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
+    console.log({
+      message: "Login successful",
+      data: {
+        userId: contactRecord.Id,
+        email,
+        firstName: contactRecord,
+        lastName: contactRecord,
+      },
+      success: true,
+    });
 
     res.status(200).json({
       message: "Login successful",
@@ -616,6 +629,7 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
         firstName: contactRecord,
         lastName: contactRecord,
       },
+      success: true,
     });
   } catch (error) {
     res.status(500).json({ message: "Login failed", error });
