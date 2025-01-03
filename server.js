@@ -615,8 +615,8 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
       data: {
         userId: contactRecord.Id,
         email,
-        firstName: contactRecord,
-        lastName: contactRecord,
+        firstName: contactRecord.FirstName,
+        lastName: contactRecord.LastName,
       },
       success: true,
     });
