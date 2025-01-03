@@ -579,7 +579,7 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
     // }
 
     // Query Contact
-    const contactQuery = `SELECT Id, Password__c, Is_Email_Verify__c, CHF_Account_Status__c FROM Contact WHERE Email = '${email}'`;
+    const contactQuery = `SELECT Id, Password__c, Is_Email_Verify__c, CHF_Account_Status__c, FIRSTNAME, LASTNAME FROM Contact WHERE Email = '${email}'`;
     const contact = await salesforceRequest(
       "GET",
       `query?q=${encodeURIComponent(contactQuery)}`
@@ -610,7 +610,12 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
 
     res.status(200).json({
       message: "Login successful",
-      data: { userId: contactRecord.Id, email },
+      data: {
+        userId: contactRecord.Id,
+        email,
+        firstName: contactRecord.FirstName,
+        lastName: contactRecord.LastName,
+      },
     });
   } catch (error) {
     res.status(500).json({ message: "Login failed", error });
@@ -863,6 +868,7 @@ app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
       data1?.records[0]?.BillingState === data1?.records[0]?.ShippingState &&
       data1?.records[0]?.BillingPostalCode ===
         data1?.records[0]?.ShippingPostalCode;
+    console.log(sameAddress);
 
     res.json({
       firstName: data?.records[0]?.FirstName,
