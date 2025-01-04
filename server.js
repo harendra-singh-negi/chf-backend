@@ -690,7 +690,12 @@ app.post(
         stageName = "Payment Pending";
         Transaction_ID__c = `Zelle-${generateRandomString(13)}`;
       }
-      console.log("displayName: " + displayName,"tnxId: " + tnxId,"stageName: " + stageName,"Transaction_ID__c: " + Transaction_ID__c);
+      console.log(
+        "displayName: " + displayName,
+        "tnxId: " + tnxId,
+        "stageName: " + stageName,
+        "Transaction_ID__c: " + Transaction_ID__c
+      );
 
       // Check if donor exists
       const contactQuery = `SELECT Id, Name, AccountId FROM Contact WHERE Email = '${donorEmail}'`;
@@ -803,7 +808,7 @@ app.post(
         `sobjects/Opportunity/${opportunity.id}`,
         {
           Transaction_ID__c: Transaction_ID__c,
-          EmailTriggered__c: true,
+          EmailTriggered__c: false,
         }
       );
 
