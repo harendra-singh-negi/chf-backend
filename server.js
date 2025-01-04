@@ -29,6 +29,7 @@ let accessToken = null;
 
 // Salesforce Access Token Refresh
 const refreshAccessToken = async () => {
+  console.log("refreshAccessToken");
   try {
     const response = await axios.post(
       `${BASE_URL}/services/oauth2/token`,
@@ -44,7 +45,9 @@ const refreshAccessToken = async () => {
         },
       }
     );
+    // console.log(response);
     accessToken = response.data.access_token;
+    console.log("accessToken", accessToken);
   } catch (error) {
     throw new Error("Failed to refresh Salesforce access token");
   }
@@ -54,6 +57,7 @@ const refreshAccessToken = async () => {
 const ensureSalesforceAccessToken = async (req, res, next) => {
   try {
     await refreshAccessToken();
+    console.log("Access Token Refreshed");
     req.headers["Authorization"] = `Bearer ${accessToken}`;
     next();
   } catch (error) {
@@ -632,6 +636,7 @@ app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
       success: true,
     });
   } catch (error) {
+    console.log(error);
     res.status(500).json({ message: "Login failed", error });
   }
 });
@@ -680,11 +685,12 @@ app.post(
       // Adjust stage name based on transaction ID
       if (tnxId === "cheque") {
         stageName = "Payment Pending";
-        Transaction_ID__c = `cheque-${generateRandomString(12)}`;
+        Transaction_ID__c = `Check-${generateRandomString(12)}`;
       } else if (tnxId === "zelle") {
         stageName = "Payment Pending";
-        Transaction_ID__c = `zelle-${generateRandomString(13)}`;
+        Transaction_ID__c = `Zelle-${generateRandomString(13)}`;
       }
+      console.log("displayName: " + displayName,"tnxId: " + tnxId,"stageName: " + stageName,"Transaction_ID__c: " + Transaction_ID__c);
 
       // Check if donor exists
       const contactQuery = `SELECT Id, Name, AccountId FROM Contact WHERE Email = '${donorEmail}'`;
@@ -797,7 +803,7 @@ app.post(
         `sobjects/Opportunity/${opportunity.id}`,
         {
           Transaction_ID__c: Transaction_ID__c,
-          EmailTriggered__c: false,
+          EmailTriggered__c: true,
         }
       );
 
@@ -934,6 +940,18 @@ app.patch(
         "GET",
         `query?q=${encodeURIComponent(query)}`
       );
+      console.log({
+        BillingCity: req.body.billingCity,
+        BillingCountry: req.body.billingCountry,
+        BillingPostalCode: req.body.billingPostalCode,
+        BillingState: req.body.billingState,
+        BillingStreet: req.body.billingStreet,
+        ShippingCity: req.body.shippingCity,
+        ShippingCountry: req.body.shippingCountry,
+        ShippingPostalCode: req.body.shippingPostalCode,
+        ShippingState: req.body.shippingState,
+        ShippingStreet: req.body.shippingStreet,
+      });
       const data = await salesforceRequest(
         "PATCH",
         `sobjects/Account/${contactData?.records[0]?.Account?.Id}`,
