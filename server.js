@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const crypto = require("crypto");
 const cors = require("cors");
+
 require("dotenv").config();
 
 const app = express();
@@ -12,13 +13,13 @@ app.get("/health", (req, res) => {
 });
 // Middleware
 app.use(cors());
-// const corsOptions = {
-//   origin: "*", // Allow all origins
-//   methods: "GET,HEAD,PUT,PATCH,POST,DELETE", // Allow all standard methods
-//   allowedHeaders: ["Content-Type", "Authorization"], // Specify allowed headers
-// };
+const corsOptions = {
+  origin: "*", // Allow all origins
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE", // Allow all standard methods
+  allowedHeaders: ["Content-Type", "Authorization"], // Specify allowed headers
+};
 
-// app.use(cors(corsOptions));
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Salesforce Config
@@ -98,7 +99,96 @@ const generateActivationToken = (email) => {
     .digest("hex");
 };
 
+const getPublicIp = () => {
+  try {
+    const output = execSync("curl http://checkip.dyndns.com/").toString();
+    const ip = output.match(/Address: (\d+\.\d+\.\d+\.\d+)/)[1];
+    return ip;
+  } catch (error) {
+    console.error("Failed to fetch public IP:", error);
+    return null;
+  }
+};
+
 // Routes
+// 1. Profile Login
+app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
+  console.log("req.body", req.body);
+  const { email, password } = req.body;
+  console.log(email, password);
+
+  try {
+    // Validate reCAPTCHA
+    // const recaptchaResponse = false;
+
+    // if (!recaptchaResponse.data.success) {
+    //   return res.status(400).json({ message: "reCAPTCHA verification failed" });
+    // }
+    //const recaptchaResponse = false;
+
+    //    if (!recaptchaResponse.data.success) {
+    //    return res.status(400).json({ message: "reCAPTCHA verification failed" });
+    // }
+
+    // Query Contact
+    const contactQuery = `SELECT Id, Password__c, Is_Email_Verify__c, CHF_Account_Status__c, FIRSTNAME, LASTNAME FROM Contact WHERE Email = '${email}'`;
+    const contact = await salesforceRequest(
+      "GET",
+      `query?q=${encodeURIComponent(contactQuery)}`
+    );
+    console.log(contact);
+
+    if (contact.totalSize === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const contactRecord = contact.records[0];
+    console.log(contactRecord);
+
+    if (
+      contactRecord.CHF_Account_Status__c !== "Approve" ||
+      !contactRecord.Is_Email_Verify__c
+    ) {
+      return res
+        .status(403)
+        .json({ message: "Account not verified or approved" });
+    }
+
+    const decryptedPassword = decryptVal(contactRecord.Password__c);
+    //    const decryptedPassword = decryptVal(contactRecord.Password__c);
+    console.log("decryptedPassword", decryptedPassword);
+
+    if (decryptedPassword !== password) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+    console.log({
+      message: "Login successful",
+      data: {
+        userId: contactRecord.Id,
+        email,
+        firstName: contactRecord.FirstName,
+        lastName: contactRecord.LastName,
+      },
+      success: true,
+    });
+
+    res.status(200).json({
+      message: "Login successful",
+      data: {
+        userId: contactRecord.Id,
+        email,
+        firstName: contactRecord,
+        lastName: contactRecord,
+      },
+      success: true,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Login failed", error });
+  }
+});
+
+//2. Profile Register/ Create Profile
 app.post(
   "/api/auth/register",
   ensureSalesforceAccessToken,
@@ -181,6 +271,7 @@ app.post(
   }
 );
 
+// 3. Profile Activate
 app.get(
   "/activate/:uidb64/:token",
   ensureSalesforceAccessToken,
@@ -222,6 +313,7 @@ app.get(
   }
 );
 
+// 4. Profile Check Email
 app.post(
   "/api/auth/check-email",
   ensureSalesforceAccessToken,
@@ -277,6 +369,7 @@ app.post(
   }
 );
 
+// 5. Profile Reset Password
 app.post(
   "/api/auth/reset-password",
   ensureSalesforceAccessToken,
@@ -320,6 +413,7 @@ app.post(
   }
 );
 
+// 6. Profile Forgot Password
 app.post(
   "/api/auth/forgot-password",
   ensureSalesforceAccessToken,
@@ -362,6 +456,7 @@ app.post(
   }
 );
 
+// 7. Profile Update/Create
 app.post(
   "/api/profile/update",
   ensureSalesforceAccessToken,
@@ -390,137 +485,138 @@ app.post(
   }
 );
 
-// 8. Member Info Update/Create
-app.post(
-  "/api/profile/add-member",
-  ensureSalesforceAccessToken,
-  async (req, res) => {
-    const {
-      memHidId,
-      relName,
-      memFname,
-      memLname,
-      memEmailAddr,
-      memMobile,
-      memCreateAcc,
-      memDOB,
-      accountId,
-    } = req.body;
+// 8. Add members
+app.post("/api/member/add", ensureSalesforceAccessToken, async (req, res) => {
+  const {
+    relName,
+    memFname,
+    memLname,
+    memEmailAddr,
+    memMobile,
+    memDOB,
+    memCreateAcc,
+    useremail,
+    contactId,
+  } = req.body;
+  const memHidId = contactId;
 
-    try {
-      // Get the RecordType ID for "Household Account"
-      const recordTypeQuery = `SELECT Id FROM RecordType WHERE Name = 'Household Account'`;
-      const recordType = await salesforceRequest(
-        "GET",
-        `query?q=${encodeURIComponent(recordTypeQuery)}`
-      );
+  try {
+    // Fetch account ID and household name using useremail
+    const contactQuery = `SELECT AccountId FROM Contact WHERE Email = '${useremail}'`;
+    const contactResult = await salesforceRequest(
+      "GET",
+      `query?q=${encodeURIComponent(contactQuery)}`
+    );
 
-      const recordTypeId = recordType.records[0].Id;
-
-      // Format date
-      const formattedDOB = formatDate(memDOB);
-
-      // Generate activation and reset password links
-      const activationLink = generateActivationLink(memEmailAddr);
-      const resetPwdLink = generateResetPasswordLink(memEmailAddr);
-
-      // Check if a contact already exists with the provided email
-      const contactQuery = `SELECT Id FROM Contact WHERE Account.RecordTypeId = '${recordTypeId}' AND Email = '${memEmailAddr}'`;
-      const existingContact = await salesforceRequest(
-        "GET",
-        `query?q=${encodeURIComponent(contactQuery)}`
-      );
-
-      if (memHidId) {
-        // Update existing contact
-        const updateData = {
-          FirstName: memFname,
-          LastName: memLname,
-          MobilePhone: memMobile,
-          Password__c:
-            memCreateAcc === "Yes"
-              ? encryptVal(`Chfusa${new Date().getFullYear()}!`)
-              : "",
-          Birthdate: formattedDOB,
-          Member_Relationship__c: relName,
-          Member_Account__c: memCreateAcc === "Yes",
-          Activate_Link__c: activationLink,
-          Reset_Pwd_Link__c: resetPwdLink,
-        };
-
-        await salesforceRequest(
-          "PATCH",
-          `sobjects/Contact/${memHidId}`,
-          updateData
-        );
-
-        res.status(200).json({
-          status: "success",
-          message: "Member updated successfully",
-        });
-      } else if (existingContact.totalSize === 0) {
-        // Create new contact
-        const createData = {
-          FirstName: memFname,
-          LastName: memLname,
-          Email: memEmailAddr,
-          MobilePhone: memMobile,
-          AccountId: accountId,
-          Password__c:
-            memCreateAcc === "Yes"
-              ? encryptVal(`Chfusa${new Date().getFullYear()}!`)
-              : "",
-          Birthdate: formattedDOB,
-          Member_Relationship__c: relName,
-          Member_Account__c: memCreateAcc === "Yes",
-          Activate_Link__c: activationLink,
-          Is_Email_Verify__c: true,
-          Is_Member_Email__c: true,
-          CHF_Account_Status__c: "Approve",
-          Reset_Pwd_Link__c: resetPwdLink,
-        };
-
-        await salesforceRequest("POST", "sobjects/Contact", createData);
-
-        res.status(200).json({
-          status: "success",
-          message: "Member created successfully",
-        });
-      } else {
-        res.status(400).json({
-          status: "fail",
-          message:
-            "This email already exists with another account. Please try with another email.",
-        });
-      }
-    } catch (error) {
-      console.error("Error in add-member:", error);
-      res.status(500).json({
-        status: "fail",
-        message: "Something went wrong, please try again later.",
-        error: error.message,
-      });
+    if (contactResult.totalSize === 0) {
+      return res.status(404).json({ message: "User email not found." });
     }
+
+    const accountId = contactResult.records[0].AccountId;
+
+    const accountQuery = `SELECT Name FROM Account WHERE Id = '${accountId}'`;
+    const accountResult = await salesforceRequest(
+      "GET",
+      `query?q=${encodeURIComponent(accountQuery)}`
+    );
+
+    if (accountResult.totalSize === 0) {
+      return res.status(404).json({ message: "Account not found." });
+    }
+
+    const householdName = accountResult.records[0].Name;
+
+    // Check if memHidId is provided for update
+    if (memHidId) {
+      const checkContactQuery = `SELECT Id FROM Contact WHERE Id = '${memHidId}' AND Account.RecordTypeId = '${accountId}'`;
+      const checkContact = await salesforceRequest(
+        "GET",
+        `query?q=${encodeURIComponent(checkContactQuery)}`
+      );
+
+      if (checkContact.totalSize === 0) {
+        return res
+          .status(404)
+          .json({ message: "No matching contact found to update." });
+      }
+
+      const formattedDOB = memDOB.split("/").reverse().join("-");
+
+      await salesforceRequest("PATCH", `sobjects/Contact/${memHidId}`, {
+        FirstName: memFname,
+        LastName: memLname,
+        MobilePhone: memMobile,
+        Birthdate: formattedDOB,
+        Member_Relationship__c: relName,
+        Member_Account__c: memCreateAcc === "Yes",
+        Household__c: householdName,
+      });
+
+      return res.status(200).json({ message: "Member updated successfully." });
+    }
+
+    // Check if Contact already exists
+    const existingContactQuery = `SELECT Id FROM Contact WHERE Account.RecordTypeId = '${accountId}' AND Email = '${memEmailAddr}'`;
+    const contactExists = await salesforceRequest(
+      "GET",
+      `query?q=${encodeURIComponent(existingContactQuery)}`
+    );
+
+    if (contactExists.totalSize > 0) {
+      return res
+        .status(400)
+        .json({ message: "This email already exists with another account." });
+    }
+
+    // Prepare additional fields
+    const curYear = new Date().getFullYear();
+    const pwd = `Chfusa${curYear}!`;
+    const password = encryptVal(pwd);
+
+    const activationLink =
+      memCreateAcc === "Yes"
+        ? `http://${req.get("host")}/chfusa/activate/${Buffer.from(
+            memEmailAddr
+          ).toString("base64")}/${generateActivationToken(memEmailAddr)}`
+        : "";
+
+    const resetPwdLink =
+      memCreateAcc === "Yes"
+        ? `http://${req.get("host")}/resetpassword/${Buffer.from(
+            memEmailAddr
+          ).toString("base64")}/${generateActivationToken(memEmailAddr)}`
+        : "";
+
+    const formattedDOB = memDOB.split("/").reverse().join("-");
+
+    // Create new member
+    await salesforceRequest("POST", "sobjects/Contact", {
+      FirstName: memFname,
+      LastName: memLname,
+      Email: memEmailAddr,
+      MobilePhone: memMobile,
+      AccountId: accountId,
+      Password__c: password,
+      Birthdate: formattedDOB,
+      Member_Relationship__c: relName,
+      Member_Account__c: memCreateAcc === "Yes",
+      Activate_Link__c: activationLink,
+      Base_URL__c: `http://${req.get("host")}`,
+      Is_Email_Verify__c: true,
+      Is_Member_Email__c: true,
+      CHF_Account_Status__c: "Approve",
+      Reset_Pwd_Link__c: resetPwdLink,
+      Household__c: householdName,
+    });
+
+    res.status(201).json({ message: "Member added successfully." });
+  } catch (error) {
+    res.status(500).json({
+      message: "Something went wrong, please try again later.",
+      error,
+    });
   }
-);
-
-// Helper functions
-function formatDate(dateString) {
-  const [month, day, year] = dateString.split("/");
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-}
-
-function generateActivationLink(email) {
-  const encodedEmail = Buffer.from(email).toString("base64");
-  const token = generateActivationToken(email);
-  return `${process.env.BASE_URL}/activate/${encodedEmail}/${token}`;
-}
-
-function generateResetPasswordLink(email) {
-  const encodedEmail = Buffer.from(email).toString("base64");
-  const token = generateActivationToken(email);
-  return `${process.env.BASE_URL}/resetpassword/${encodedEmail}/${token}`;
-}
+});
 
 // 9. Delete Member
 app.post(
@@ -564,82 +660,6 @@ app.post(
     }
   }
 );
-
-app.post("/api/auth/login", ensureSalesforceAccessToken, async (req, res) => {
-  console.log("req.body", req.body);
-  const { email, password } = req.body;
-  console.log(email, password);
-
-  try {
-    // Validate reCAPTCHA
-    // const recaptchaResponse = false;
-
-    // if (!recaptchaResponse.data.success) {
-    //   return res.status(400).json({ message: "reCAPTCHA verification failed" });
-    // }
-    //const recaptchaResponse = false;
-
-    //    if (!recaptchaResponse.data.success) {
-    //    return res.status(400).json({ message: "reCAPTCHA verification failed" });
-    // }
-
-    // Query Contact
-    const contactQuery = `SELECT Id, Password__c, Is_Email_Verify__c, CHF_Account_Status__c, FIRSTNAME, LASTNAME FROM Contact WHERE Email = '${email}'`;
-    const contact = await salesforceRequest(
-      "GET",
-      `query?q=${encodeURIComponent(contactQuery)}`
-    );
-    console.log(contact);
-
-    if (contact.totalSize === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const contactRecord = contact.records[0];
-    console.log(contactRecord);
-
-    if (
-      contactRecord.CHF_Account_Status__c !== "Approve" ||
-      !contactRecord.Is_Email_Verify__c
-    ) {
-      return res
-        .status(403)
-        .json({ message: "Account not verified or approved" });
-    }
-
-    const decryptedPassword = decryptVal(contactRecord.Password__c);
-    //    const decryptedPassword = decryptVal(contactRecord.Password__c);
-    console.log("decryptedPassword", decryptedPassword);
-
-    if (decryptedPassword !== password) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    console.log({
-      message: "Login successful",
-      data: {
-        userId: contactRecord.Id,
-        email,
-        firstName: contactRecord.FirstName,
-        lastName: contactRecord.LastName,
-      },
-      success: true,
-    });
-
-    res.status(200).json({
-      message: "Login successful",
-      data: {
-        userId: contactRecord.Id,
-        email,
-        firstName: contactRecord,
-        lastName: contactRecord,
-      },
-      success: true,
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Login failed", error });
-  }
-});
 
 // 10. Donations Initial opportunity creation
 app.post(
@@ -769,25 +789,68 @@ app.post(
       );
 
       // Process donation categories
-      for (const category of donationCategories) {
-        const { projectName, unitAmount, quantity, remark } = category;
+      // for (const category of donationCategories) {
+      //   const { projectName, unitAmount, quantity, remark } = category;
 
-        if (unitAmount) {
-          const donationSummaryData = {
-            Opportunity__c: opportunity.id,
-            Campaign_Name__c: projectName,
-            Amount__c: unitAmount,
-            Quantity__c: quantity,
-            Remark__c: remark,
-          };
+      //   if (unitAmount) {
+      //     const donationSummaryData = {
+      //       Opportunity__c: opportunity.id,
+      //       Campaign_Name__c: projectName,
+      //       Amount__c: unitAmount,
+      //       Quantity__c: quantity,
+      //       Remark__c: remark,
+      //     };
 
-          await salesforceRequest(
-            "POST",
-            "sobjects/DonationSummary__c",
-            donationSummaryData
-          );
-        }
-      }
+      //     await salesforceRequest(
+      //       "POST",
+      //       "sobjects/DonationSummary__c",
+      //       donationSummaryData
+      //     );
+      //   }
+      // }
+
+      // const pLimit = (await import("p-limit")).default;
+      // // Let's say we allow 3 concurrent requests at a time
+      // const limit = pLimit(10);
+
+      // // Filter categories to only those that have a unitAmount
+      // const categoriesToCreate = donationCategories.filter(
+      //   (category) => category.unitAmount
+      // );
+
+      // const promises = categoriesToCreate.map((category) =>
+      //   limit(async () => {
+      //     const { projectName, unitAmount, quantity, remark } = category;
+      //     const donationSummaryData = {
+      //       Opportunity__c: opportunity.id,
+      //       Campaign_Name__c: projectName,
+      //       Amount__c: unitAmount,
+      //       Quantity__c: quantity,
+      //       Remark__c: remark,
+      //     };
+
+      //     return salesforceRequest(
+      //       "POST",
+      //       "sobjects/DonationSummary__c",
+      //       donationSummaryData
+      //     );
+      //   })
+      // );
+
+      // const results = await Promise.allSettled(promises);
+
+      // // In case you want to know if anything failed or succeeded
+      // const successes = [];
+      // const failures = [];
+
+      // results.forEach((res, i) => {
+      //   if (res.status === "fulfilled") {
+      //     successes.push(res.value);
+      //   } else {
+      //     failures.push({ index: i, reason: res.reason });
+      //   }
+      // });
+      // console.log("Successful donation summaries:", successes, failures);
       // const donationSummaries = donationCategories.map((category) => ({
       //   Opportunity__c: opportunity.id,
       //   Campaign_Name__c: category.projectName,
@@ -801,6 +864,67 @@ app.post(
       //   records: donationSummaries,
       // });
       // console.log(sum_resp[0].errors);
+      // Utility function to create a delay
+      // const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      // const categoriesToCreate = donationCategories.filter(
+      //   (category) => category.unitAmount
+      // );
+
+      // // Run promises with delay
+      // for (const [index, category] of categoriesToCreate.entries()) {
+      //   const { projectName, unitAmount, quantity, remark } = category;
+      //   const donationSummaryData = {
+      //     Opportunity__c: opportunity.id,
+      //     Campaign_Name__c: projectName,
+      //     Amount__c: unitAmount,
+      //     Quantity__c: quantity,
+      //     Remark__c: remark,
+      //   };
+
+      //   // Add delay before making the request
+      //   if (index > 0) await delay(100); // Delay for subsequent requests
+
+      //   await salesforceRequest(
+      //     "POST",
+      //     "sobjects/DonationSummary__c",
+      //     donationSummaryData
+      //   );
+      // }
+      const compositePayload = {
+        batchRequests: donationCategories.map((category) => ({
+          method: "POST",
+          url: `/services/data/${API_VERSION}/sobjects/DonationSummary__c`,
+          richInput: {
+            Opportunity__c: opportunity.id,
+            Campaign_Name__c: category.projectName,
+            Amount__c: category.unitAmount,
+            Quantity__c: category.quantity,
+            Remark__c: category.remark,
+          },
+        })),
+      };
+
+      // Send the batch request to Salesforce
+      const compositeResponse = await salesforceRequest(
+        "POST",
+        "composite/batch",
+        compositePayload
+      );
+
+      // Handle responses
+      compositeResponse.results.forEach((result, index) => {
+        if (result.statusCode >= 400) {
+          console.error(
+            `Failed for category: ${donationCategories[index].projectName}`,
+            result.result
+          );
+        } else {
+          console.log(
+            `Success for category: ${donationCategories[index].projectName}`
+          );
+        }
+      });
 
       // Update opportunity with transaction details
       await salesforceRequest(
@@ -825,6 +949,50 @@ app.post(
     }
   }
 );
+
+//11. join Newsletter
+app.post("/api/newsletter", ensureSalesforceAccessToken, async (req, res) => {
+  const { SubscriberEmail } = req.body;
+
+  try {
+    // Get Subscriber IP Address
+    const SubscriberIPAddress = getPublicIp();
+    if (!SubscriberIPAddress) {
+      return res
+        .status(500)
+        .json({ message: "Unable to fetch public IP address." });
+    }
+
+    // Check if already subscribed
+    const newsletterQuery = `SELECT Subscriber_Email__c FROM Newsletter__c WHERE Subscriber_Email__c = '${SubscriberEmail}'`;
+    const newsletterRec = await salesforceRequest(
+      "GET",
+      `query?q=${encodeURIComponent(newsletterQuery)}`
+    );
+
+    if (newsletterRec.totalSize > 0) {
+      return res
+        .status(400)
+        .json({ message: "Already Subscribed!", success: false });
+    }
+
+    // Add subscription
+    await salesforceRequest("POST", "sobjects/Newsletter__c", {
+      Subscriber_Email__c: SubscriberEmail,
+      Subscriber_IP_Address__c: SubscriberIPAddress,
+    });
+
+    res
+      .status(201)
+      .json({ message: "Subscribed Successfully.", success: true });
+  } catch (error) {
+    res.status(500).json({
+      message: "Something went wrong, please try again later.",
+      error,
+      success: false,
+    });
+  }
+});
 
 // Helper function to generate a random string
 const generateRandomString = (length) => {
@@ -870,7 +1038,7 @@ app.post("/create-payment-intent", async (req, res) => {
 
 // ========== SALESFORCE ROUTES (with ensureSalesforceAccessToken) ==========
 
-// 1. Contact Query
+// 12. Profile Get Profile details
 app.get("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
   try {
     const email = req.query.email;
@@ -932,7 +1100,7 @@ app.post("/api/contact", ensureSalesforceAccessToken, async (req, res) => {
   }
 });
 
-// 3. Account Update
+// 3. Profile Address Update
 app.patch(
   "/api/profile/address",
   ensureSalesforceAccessToken,
