@@ -99,16 +99,29 @@ const generateActivationToken = (email) => {
     .digest("hex");
 };
 
-const getPublicIp = () => {
+// const getPublicIp = () => {
+//   try {
+//     const output = execSync("curl http://checkip.dyndns.com/").toString();
+//     const ip = output.match(/Address: (\d+\.\d+\.\d+\.\d+)/)[1];
+//     return ip;
+//   } catch (error) {
+//     console.error("Failed to fetch public IP:", error);
+//     return null;
+//   }
+// };
+
+
+async function getPublicIp() {
   try {
-    const output = execSync("curl http://checkip.dyndns.com/").toString();
-    const ip = output.match(/Address: (\d+\.\d+\.\d+\.\d+)/)[1];
+    const response = await axios.get('http://checkip.dyndns.com/');
+    const ip = response.data.match(/Current IP Address: ([\d\.]+)/)[1].toString();;
+    console.log('IP Address:', typeof ip);
     return ip;
   } catch (error) {
-    console.error("Failed to fetch public IP:", error);
     return null;
+    console.error('Error fetching IP address:', error);
   }
-};
+}
 
 // Routes
 // 1. Profile Login
